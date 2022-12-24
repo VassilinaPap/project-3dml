@@ -1,0 +1,7 @@
+conda create --no-default-packages -n 3dml python=3.7
+source activate 3dml
+pip install -r ./requirements.txt
+
+# Dataset #
+http://cvgl.stanford.edu/data2/ShapeNetRendering.tgz
+http://cvgl.stanford.edu/data2/ShapeNetVox32.tgz
