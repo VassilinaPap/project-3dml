@@ -161,7 +161,7 @@ class ShapeNetDataset(Dataset):
         # Save it and then view it with meshlab for debugging #
         #save_voxel_grid("./test.ply", voxel)
 
-        class_label_id = float(self.classes_mapping_id[class_label])
+        class_label_id = int(self.classes_mapping_id[class_label])
         class_label_id = torch.as_tensor(class_label_id)
 
         return {'images': images,

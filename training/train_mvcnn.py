@@ -56,6 +56,9 @@ def train(model, train_dataloader, val_dataloader, device, config):
                 model.eval()
                 # Evaluation on entire validation set
                 loss_val = 0.
+
+                total = 0.0
+                correct = 0.0
                 for batch_val in val_dataloader:
                     ShapeNetDataset.move_batch_to_device(batch_val, device)
 
@@ -63,8 +66,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
                         predictions = model(batch_val['images'])
                         _, predicted_labels = torch.max(predictions, dim=1)
                         val_loss = loss_criterion(predictions, batch_val['label'])
-                        
-                  
+
                     total += predicted_labels.shape[0]
                     correct += (predicted_labels == batch_val["label"]).sum().item()
 
@@ -72,18 +74,17 @@ def train(model, train_dataloader, val_dataloader, device, config):
 
                 loss_val /= len(val_dataloader)
                 if loss_val < best_loss_val:
-                    torch.save(model.state_dict(), f'exercise_3/runs/{config["experiment_name"]}/model_best.ckpt')
+                    torch.save(model.state_dict(), f'./project/runs/{config["experiment_name"]}/model_best_loss.ckpt')
                     best_loss_val = loss_val
 
                 print(f'[{epoch:03d}/{batch_idx:05d}] val_loss: {loss_val:.6f} | best_loss_val: {best_loss_val:.6f}')
 
                 accuracy = 100 * correct / total
 
-
                 if accuracy > best_accuracy:
-                    torch.save(model.state_dict(), f'exercise_2/runs/{config["experiment_name"]}/model_best.ckpt')
+                    torch.save(model.state_dict(), f'./project/runs/{config["experiment_name"]}/model_best_acc.ckpt')
                     best_accuracy = accuracy
-                # TODO: Set model back to train
+
         model.train()
         scheduler.step()
 

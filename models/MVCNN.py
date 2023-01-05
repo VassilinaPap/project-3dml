@@ -77,7 +77,6 @@ class MVCNN(nn.Module):
         # self.std = Variable(torch.FloatTensor([0.229, 0.224, 0.225]), requires_grad=False).cuda()
 
 
-
         if cnn_name=='mobilenet_v3':
             self.net = models.mobilenet_v3_large(pretrained=True)
             self.net_1 = nn.Sequential(*list(self.net.children())[:-1])
@@ -86,7 +85,6 @@ class MVCNN(nn.Module):
             self.net = models.resnet18(pretrained=True)
             self.net_1 = nn.Sequential(*list(self.net.children())[:-1])
             self.net_2 = nn.Linear(512,13)
-
 
     def forward(self, x):
         # [batch=2, views=4, 3, 137, 137] #
@@ -98,10 +96,13 @@ class MVCNN(nn.Module):
             view_features = view_features.view(view_features.shape[0], -1)
             feature_list.append(view_features)
 
+        # 4 -> [2, 290] #
+        # feature_list  #
         max_features = feature_list[0]
-        for view_features in feature_list[0:]:
+        for view_features in feature_list[1:]:
             max_features = torch.max(max_features, view_features)
 
+        # [2, 290] #
         ret = self.net_2(max_features)
 
         return ret
