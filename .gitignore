@@ -3,6 +3,7 @@ data/ShapeNetVox32/
 data/ShapeNetRendering/
 *.ply
 *.png
+training/project/runs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
