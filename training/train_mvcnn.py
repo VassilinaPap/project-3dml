@@ -113,7 +113,7 @@ def main(config):
         print('Using CPU')
 
     # Create Dataloaders
-    train_dataset = ShapeNetDataset('train' if not config['is_overfit'] else 'overfit')
+    train_dataset = ShapeNetDataset(split='train' if not config['is_overfit'] else 'overfit')
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,   # Datasets return data one sample at a time; Dataloaders use them and aggregate samples into batches
         batch_size=config['batch_size'],   # The size of batches is defined here
@@ -123,7 +123,7 @@ def main(config):
         # worker_init_fn=train_dataset.worker_init_fn  TODO: Uncomment this line if you are using shapenet_zip on Google Colab
     )
 
-    val_dataset = ShapeNetDataset('val' if not config['is_overfit'] else 'overfit')
+    val_dataset = ShapeNetDataset(split='val' if not config['is_overfit'] else 'overfit')
     val_dataloader = torch.utils.data.DataLoader(
         val_dataset,     # Datasets return data one sample at a time; Dataloaders use them and aggregate samples into batches
         batch_size=config['batch_size'],   # The size of batches is defined here
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     'experiment_name': 'mvcnn_overfitting',
     'device': 'cuda:0',  # change this to cpu if you do not have a GPU
     'is_overfit': True,
-    'batch_size': 8,
+    'batch_size': 4,
     'resume_ckpt': None,
     'learning_rate': 0.00005,
     'max_epochs': 250,
