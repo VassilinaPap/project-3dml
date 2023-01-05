@@ -166,7 +166,8 @@ class ShapeNetDataset(Dataset):
 
         return {'images': images,
                 'voxel': voxel,
-                'label': class_label_id
+                'label': class_label_id,
+                'class': class_label
                 }
 
     @staticmethod

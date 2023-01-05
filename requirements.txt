@@ -13,3 +13,4 @@ optuna
 scikit-learn
 open3d
 imgaug
+protobuf==3.20.*
