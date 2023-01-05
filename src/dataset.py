@@ -15,7 +15,7 @@ import cv2
 from utils import read_as_3d_array, save_voxel_grid
 
 class ShapeNetDataset(Dataset):
-    def __init__(self, data_dir="../data/", images_dir="ShapeNetRendering/", voxels_dir="ShapeNetVox32/", split="train", num_views=24, max_views=24, augmentation_json_flag=True, augmentations_flag=True):
+    def __init__(self, data_dir="../data/", images_dir="ShapeNetRendering/", voxels_dir="ShapeNetVox32/", split="train", num_views=4, max_views=24, augmentation_json_flag=False, augmentations_flag=False):
 
         # Dir names #
         self.data_dir = data_dir
@@ -28,6 +28,7 @@ class ShapeNetDataset(Dataset):
         self.max_views = max_views
 
         self.classes_mapping = None
+        self.classes_mapping_id = {}
         self.data_ids = []
 
         # Augmentation json -> replace some views with views from different category #
@@ -41,6 +42,11 @@ class ShapeNetDataset(Dataset):
         # Class name -> "folder" id #
         with open(data_dir  + "classes.json") as classes_file:
             self.classes_mapping = json.load(classes_file)
+
+            index_x = 0
+            for key in self.classes_mapping:
+                self.classes_mapping_id[self.classes_mapping[key]] = index_x
+                index_x += 1
 
         # Save all dataset ids #
         with open(data_dir + self.split + ".txt") as ids_files:
@@ -155,9 +161,12 @@ class ShapeNetDataset(Dataset):
         # Save it and then view it with meshlab for debugging #
         #save_voxel_grid("./test.ply", voxel)
 
+        class_label_id = float(self.classes_mapping_id[class_label])
+        class_label_id = torch.as_tensor(class_label_id)
+
         return {'images': images,
                 'voxel': voxel,
-                'label': class_label
+                'label': class_label_id
                 }
 
     @staticmethod

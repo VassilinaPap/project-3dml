@@ -156,11 +156,12 @@ if __name__ == "__main__":
     'experiment_name': 'mvcnn_overfitting',
     'device': 'cuda:0',  # change this to cpu if you do not have a GPU
     'is_overfit': True,
-    'batch_size': 4,
+    'batch_size': 2,
     'resume_ckpt': None,
     'learning_rate': 0.00005,
     'max_epochs': 250,
     'print_every_n': 10,
     'validate_every_n': 25,
     }
+
     main(config)
