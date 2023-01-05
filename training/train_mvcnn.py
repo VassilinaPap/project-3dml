@@ -1,10 +1,12 @@
 from pathlib import Path
-
-import numpy as np
 import torch
 import torch.nn as nn
-from project.models.MVCNN import MVCNN
-from project.src.dataset import ShapeNetDataset
+import sys
+sys.path.append('../models')
+from MVCNN import MVCNN
+sys.path.append('../src')
+from dataset import ShapeNetDataset
+import numpy as np
 
 
 

@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models as models
-from .Model import Model
+
 
 # mean = Variable(torch.FloatTensor([0.485, 0.456, 0.406]), requires_grad=False).cuda()
 # std = Variable(torch.FloatTensor([0.229, 0.224, 0.225]), requires_grad=False).cuda()
@@ -60,7 +60,7 @@ from .Model import Model
 #             return self.net_2(y.view(y.shape[0],-1))
 
 
-class MVCNN(Model):
+class MVCNN(nn.Module):
 
     def __init__(self, name, model, nclasses=40, cnn_name='mobilenet_v3', num_views=12):
         super(MVCNN, self).__init__(name)
