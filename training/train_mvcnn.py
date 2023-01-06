@@ -1,55 +1,58 @@
 from pathlib import Path
-import torch
-import torch.nn as nn
+
 import sys
 sys.path.append('../models')
-from MVCNN import MVCNN
 sys.path.append('../src')
-from dataset import ShapeNetDataset
-import numpy as np
+
+import torch
+import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
-import matplotlib.pyplot as plt
-import cv2
-import random
 import torch.nn.functional as F
+
+import numpy as np
+import random
+
+import matplotlib.pyplot as plt
+
+from MVCNN import MVCNN
+from dataset import ShapeNetDataset
 
 plt.switch_backend('agg')
 
 def train(model, train_dataloader, val_dataloader, device, config):
-    # TODO: Declare loss and move to device; we need both smoothl1 and pure l1 losses here
     loss_criterion = nn.CrossEntropyLoss().to(device)
  
-    # TODO: Declare optimizer with learning rate given in config
     optimizer = torch.optim.Adam(model.parameters(),config['learning_rate'])
 
-    # Here, we follow the original implementation to also use a learning rate scheduler -- it simply reduces the learning rate to half every 20 epochs
-    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
 
     logger = SummaryWriter()
 
-    # TODO: Set model to train
     model.train()
     best_loss_val = np.inf
-    best_accuracy = 0.
-    # Keep track of running average of train loss for printing
-    train_loss_running = 0.
+
+    best_accuracy = 0.0
+    train_loss_running = 0.0
 
     for epoch in range(config['max_epochs']):
         for batch_idx, batch in enumerate(train_dataloader):
-            # TODO: Move batch to device, set optimizer gradients to zero, perform forward pass
             ShapeNetDataset.move_batch_to_device(batch, device)
+
             optimizer.zero_grad()
+
+            # Predict classes - [batch, classes] #
             predictions = model(batch['images'])
 
+            # Get indexes #
             _, predicted_labels = torch.max(predictions, dim=1)
             target = batch['label']
 
-            # TODO: Compute loss, Compute gradients, Update network parameters
+            # BCE #
             loss = loss_criterion(predictions, target)
             loss.backward()
-            # TODO: update network params
             optimizer.step()
-            # Logging
+
+            # Logging #
             train_loss_running += loss.item()
             iteration = epoch * len(train_dataloader) + batch_idx
 
@@ -95,13 +98,15 @@ def train(model, train_dataloader, val_dataloader, device, config):
 
             accuracy = 100 * correct / total
 
+            scheduler.step(loss_val)
+            logger.add_scalar('loss/lr_rate', scheduler.optimizer.param_groups[0]['lr'], epoch)
+
             logger.add_scalar('loss/val_acc', accuracy, epoch)
             if accuracy > best_accuracy:
                 torch.save(model.state_dict(), f'./project/runs/{config["experiment_name"]}/model_best_acc.ckpt')
                 best_accuracy = accuracy
 
         model.train()
-        #scheduler.step(loss_val)
 
 # plot the images in the batch, along with predicted and true labels
 def plot_classes_preds(images, predicted_labels, predictions, labels, classes):
@@ -203,10 +208,10 @@ if __name__ == "__main__":
     'batch_size': 8,
     'resume_ckpt': None,
     'learning_rate': 0.00001,
-    'max_epochs': 250,
+    'max_epochs': 350,
     'print_every_n': 10,
     'validate_every_n': 25,
-    'num_views': 5,
+    'num_views': 6,
     'augmentation_json_flag': False,
     'augmentations_flag': False
     }
