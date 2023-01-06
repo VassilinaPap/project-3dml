@@ -211,6 +211,25 @@ class ShapeNetDataset(Dataset):
         batch["label"] = batch["label"].to(device)
         batch["voxel"] = batch["voxel"].to(device)
 
+    @staticmethod
+    def index_to_class(idx):
+        mapping = {0: "airplane",
+                   1: "bench",
+                   2: "cabinet",
+                   3: "car",
+                   4: "chair",
+                   5: "display",
+                   6: "lamp",
+                   7: "loudspeaker",
+                   8: "rifle",
+                   9: "sofa",
+                   10: "table",
+                   11: "telephone",
+                   12: "watercraft"
+                }
+
+        return mapping[idx]
+
 if __name__ == "__main__":
 
     #dataset = ShapeNetDataset(split="train", num_views=15, augmentation_json_flag=True, augmentations_flag=True)

@@ -11,6 +11,9 @@ from torch.utils.tensorboard import SummaryWriter
 import matplotlib.pyplot as plt
 import cv2
 import random
+import torch.nn.functional as F
+
+plt.switch_backend('agg')
 
 def train(model, train_dataloader, val_dataloader, device, config):
     # TODO: Declare loss and move to device; we need both smoothl1 and pure l1 losses here
@@ -20,7 +23,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
     optimizer = torch.optim.Adam(model.parameters(),config['learning_rate'])
 
     # Here, we follow the original implementation to also use a learning rate scheduler -- it simply reduces the learning rate to half every 20 epochs
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
 
     logger = SummaryWriter()
 
@@ -38,7 +41,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
             optimizer.zero_grad()
             predictions = model(batch['images'])
 
-            probs, predicted_labels = torch.max(predictions, dim=1)
+            _, predicted_labels = torch.max(predictions, dim=1)
             target = batch['label']
 
             # TODO: Compute loss, Compute gradients, Update network parameters
@@ -58,7 +61,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
 
         # batch['images'] -> [batch, views, 3, 137, 137] # 
         # predicted_labels -> [batch]                    #
-        logger.add_figure('predictions vs. actuals', plot_classes_preds(batch['images'], predicted_labels, probs, target, batch['class']), epoch)
+        logger.add_figure('predictions vs. actuals', plot_classes_preds(batch['images'], predicted_labels, predictions, target, batch['class']), epoch)
 
         # Validation evaluation and logging
         if iteration % config['validate_every_n'] == (config['validate_every_n'] - 1):
@@ -98,19 +101,21 @@ def train(model, train_dataloader, val_dataloader, device, config):
                 best_accuracy = accuracy
 
         model.train()
-        scheduler.step()
+        #scheduler.step(loss_val)
 
 # plot the images in the batch, along with predicted and true labels
-def plot_classes_preds(images, predicted_labels, probs, labels, classes):
+def plot_classes_preds(images, predicted_labels, predictions, labels, classes):
     # batch['images'] -> [batch, views, 3, 137, 137] # 
-    fig = plt.figure(figsize=(3, 5))
+    fig = plt.figure(figsize=(10, 5))
 
-    for idx in np.arange(2):
-        ax = fig.add_subplot(1, 2, idx+1, xticks=[], yticks=[])
+    probs_max, _ = torch.max(F.softmax(predictions, dim=1), dim=1)
+
+    for idx in np.arange(4):
+        ax = fig.add_subplot(1, 4, idx+1, xticks=[], yticks=[])
         matplotlib_imshow(images[idx][0])
         ax.set_title("{0}, {1:.1f}%\n(label: {2})".format(
-            predicted_labels[idx],
-            probs[idx] * 100.0,
+            ShapeNetDataset.index_to_class(predicted_labels[idx].item()),
+            probs_max[idx] * 100,
             classes[idx]),
                     color=("green" if labels[idx]==predicted_labels[idx].item() else "red"))
 
@@ -195,9 +200,9 @@ if __name__ == "__main__":
     'experiment_name': 'mvcnn_overfitting',
     'device': 'cuda:0',  # change this to cpu if you do not have a GPU
     'is_overfit': True,
-    'batch_size': 2,
+    'batch_size': 8,
     'resume_ckpt': None,
-    'learning_rate': 0.00005,
+    'learning_rate': 0.00001,
     'max_epochs': 250,
     'print_every_n': 10,
     'validate_every_n': 25,
