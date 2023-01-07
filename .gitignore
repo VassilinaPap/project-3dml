@@ -5,6 +5,7 @@ data/ShapeNetRendering/
 *.png
 training/project/runs/
 training/runs/
+training/saved_models/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
