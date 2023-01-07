@@ -24,7 +24,8 @@ def train(model, train_dataloader, val_dataloader, device, config):
  
     optimizer = torch.optim.Adam(model.parameters(),config['learning_rate'])
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=config["scheduler_factor"], patience=config["scheduler_patience"])
+    early_stopper = EarlyStopper(patience=config['early_stopping_patience'], min_delta=0.0)
 
     logger = SummaryWriter()
 
@@ -91,6 +92,9 @@ def train(model, train_dataloader, val_dataloader, device, config):
 
             loss_val /= len(val_dataloader)
 
+            if config['early_stopping'] == True and early_stopper.early_stop(loss_val):
+                break
+
             logger.add_scalar('loss/val_classification', loss_val, epoch)
             logger.add_figure('val/predictions vs. actuals', plot_classes_preds(batch_val['images'], predicted_labels, predictions, target), epoch)
 
@@ -112,6 +116,10 @@ def train(model, train_dataloader, val_dataloader, device, config):
                 best_accuracy = accuracy
 
         model.train()
+
+###########
+# Helpers #
+###########
 
 # Plot the images in the batch, along with predicted and true labels #
 def plot_classes_preds(images, predicted_labels, predictions, labels):
@@ -136,6 +144,25 @@ def matplotlib_imshow(img):
     img = img.permute(1, 2, 0).numpy().astype("uint8")
 
     plt.imshow(img)
+
+class EarlyStopper:
+    def __init__(self, patience=1, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = np.inf
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+
+##################################
 
 def main(config):
     # Declare device #
@@ -200,7 +227,11 @@ if __name__ == "__main__":
             'num_views': 6,
             'augmentation_json_flag': False,
             'augmentations_flag': False,
-            'plot_train_images': True
+            'plot_train_images': True,
+            'early_stopping': True,
+            'early_stopping_patience': 10,
+            'scheduler_factor': 0.1,
+            'scheduler_patience': 5
     }
 
     main(config)
