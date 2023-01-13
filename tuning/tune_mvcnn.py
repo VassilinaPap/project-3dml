@@ -20,6 +20,17 @@ import optuna
 
 plt.switch_backend('agg')
 
+def ioU(predictions_rec, voxel):
+    # prob to vox grid
+    predictions_rec[predictions_rec >= 0.5] = 1
+    predictions_rec[predictions_rec < 0.5] = 0
+
+    intersection = (predictions_rec + voxel)
+    #intersection = torch.count_nonzero(intersection == 2).item()
+    intersection = torch.numel(intersection[intersection==2])
+    union = predictions_rec.sum().item() + voxel.sum().item()
+    return (intersection/union) * 100
+
 def objective(trial):
     config = {
             'experiment_name': 'mvcnn_overfitting',
@@ -37,11 +48,13 @@ def objective(trial):
             'early_stopping': True,
             'early_stopping_patience': 10,
             'scheduler_factor': 0.1,
-            'scheduler_patience': 5
+            'scheduler_patience': 5,
+            "cl_weight": 0.5
     }
 
     config['learning_rate'] = trial.suggest_loguniform('learning_rate', 1e-6, 1e-3)
     config['batch_size'] = trial.suggest_categorical('batch_size', [4, 8])
+    config['cl_weight'] = trial.suggest_float('cl_weight', 0.0, 1.0)
 
     # Declare device #
     device = torch.device('cpu')
@@ -76,33 +89,40 @@ def objective(trial):
     # Move model to specified device #
     model.to(device)
 
-    loss_criterion = nn.CrossEntropyLoss().to(device)
+    loss_criterion_cl = nn.CrossEntropyLoss().to(device)
+    loss_criterion_rec = nn.BCELoss().to(device)
  
     optimizer = torch.optim.Adam(model.parameters(), config['learning_rate'])
-
 
     model.train()
     best_loss_val = np.inf
 
     best_accuracy = 0.0
-    train_loss_running = 0.0
 
     for epoch in range(config['max_epochs']):
+
+        train_loss_running = 0.
+        train_iou = 0.
+
         for batch_idx, batch in enumerate(train_dataloader):
             ShapeNetDataset.move_batch_to_device(batch, device)
 
             optimizer.zero_grad()
 
-            # Predict classes - [batch, classes] #
-            predictions = model(batch['images'])
+            predictions_cl,predictions_rec = model(batch['images'])
 
-            # Get indexes #
-            _, predicted_labels = torch.max(predictions, dim=1)
+            _, predicted_labels = torch.max(predictions_cl, dim=1)
             target = batch['label']
-
-            # BCE #
-            loss = loss_criterion(predictions, target)
+            voxel = batch['voxel']
+            # TODO: Compute loss, Compute gradients, Update network parameters
+            loss_cl = loss_criterion_cl(predictions_cl, target)
+            loss_rec = loss_criterion_rec(predictions_rec,voxel)
+            loss = config["cl_weight"] * loss_cl + (1 - config["cl_weight"]) * loss_rec
+            iou = ioU(predictions_rec.detach().clone(),voxel)
+            train_iou += iou
             loss.backward()
+
+            # TODO: update network params
             optimizer.step()
 
             # Logging #
@@ -116,34 +136,39 @@ def objective(trial):
             model.eval()
 
             loss_val = 0.
+            val_iou = 0.
             total = 0.0
             correct = 0.0
-
             for batch_val in val_dataloader:
                 ShapeNetDataset.move_batch_to_device(batch_val, device)
 
                 with torch.no_grad():
-                    predictions = model(batch_val['images'])
-                    _, predicted_labels = torch.max(predictions, dim=1)
-                    val_loss = loss_criterion(predictions, batch_val['label'])
-                    target = batch_val['label']
+                    predictions_cl,predictions_rec = model(batch_val['images'])
+                    _, predicted_labels = torch.max(predictions_cl, dim=1)
+                    val_loss_cl = loss_criterion_cl(predictions_cl, batch_val['label'])
+                    val_loss_rec = loss_criterion_rec(predictions_rec, batch_val['voxel'])
+                    val_loss = 0.5 * val_loss_cl + 0.5 * val_loss_rec
+                    iou = ioU(predictions_rec.detach().clone(),batch_val['voxel'])
+                    val_iou += iou
+
 
                 total += predicted_labels.shape[0]
                 correct += (predicted_labels == batch_val["label"]).sum().item()
 
-                loss_val += val_loss.item()
-
+            loss_val += val_loss.item()
             loss_val /= len(val_dataloader)
+
             trial.report(loss_val, epoch)
+
             if trial.should_prune():
                 raise optuna.exceptions.TrialPruned()
 
             accuracy = 100 * correct / total
 
-
         model.train()
 
     return loss_val
+
 ##################################
 
 if __name__ == "__main__":
