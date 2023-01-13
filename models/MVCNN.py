@@ -3,7 +3,6 @@ import torch.nn as nn
 import torchvision.models as models
 
 class MVCNN(nn.Module):
-
     def __init__(self, n_classes=13, encoder='mobilenet_v3', num_views=3):
         super(MVCNN, self).__init__()
 
@@ -19,7 +18,7 @@ class MVCNN(nn.Module):
 
             self.net_1 = nn.Sequential(*list(self.net.children())[:-1])     #[B, 960, 137, 137]
 
-            self.net_2 = nn.Sequential(                                                 
+            self.net_2 = nn.Sequential(
                                 nn.Linear(960, 480), nn.BatchNorm1d(480), nn.ReLU(True),
                                 nn.Linear(480, self.n_classes)
                                 )
@@ -72,7 +71,7 @@ class MVCNN(nn.Module):
         batch_size = x.shape[0]
         x = x.transpose(0, 1) # [views, batch, 3, 137, 137]
         #print(x.shape)          
-        
+
         feature_list = []
         for view in x: # [batch, 3, 137, 137]
             view_features = self.net_1(view) # [batch, 960, 1, 1]
@@ -85,7 +84,7 @@ class MVCNN(nn.Module):
         for view_features in feature_list[1:]:
             max_features = torch.max(max_features, view_features)# [batch, 960]
         #print(max_features.shape)
-        
+
         """
         v = x.shape[0]
         b = x.shape[1]
@@ -105,7 +104,8 @@ class MVCNN(nn.Module):
         for view_features in view_features[1:]:
             max_features = torch.max(max_features, view_features)
         """
-                #classification branch
+
+        #classification branch
         cl_ret = self.net_2(max_features) # [batch, classes]
         #print(cl_ret)
         #reconstruction branch
