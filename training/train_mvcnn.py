@@ -40,7 +40,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
     # TODO: Declare optimizer with learning rate given in config
     optimizer = torch.optim.Adam(model.parameters(),config['learning_rate'])
 
-    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=config["scheduler_factor"], patience=config["scheduler_patience"])
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=config["scheduler_factor"], patience=config["scheduler_patience"])
     early_stopper = EarlyStopper(patience=config['early_stopping_patience'], min_delta=0.0)
 
     logger = SummaryWriter()
@@ -66,7 +66,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
             # TODO: Compute loss, Compute gradients, Update network parameters
             loss_cl = loss_criterion_cl(predictions_cl, target)
             loss_rec = loss_criterion_rec(predictions_rec,voxel)
-            loss = 0.5*loss_cl + 0.5*loss_rec
+            loss = config["cl_weight"] * loss_cl + (1 - config["cl_weight"]) *loss_rec
             iou = ioU(predictions_rec.detach().clone(),voxel)
             train_iou += iou
             loss.backward()
@@ -107,7 +107,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
                     _, predicted_labels = torch.max(predictions_cl, dim=1)
                     val_loss_cl = loss_criterion_cl(predictions_cl, batch_val['label'])
                     val_loss_rec = loss_criterion_rec(predictions_rec, batch_val['voxel'])
-                    val_loss = 0.5 * val_loss_cl + 0.5 * val_loss_rec
+                    val_loss = config["cl_weight"] * val_loss_cl + (1 - config["cl_weight"]) * val_loss_rec
                     iou = ioU(predictions_rec.detach().clone(),batch_val['voxel'])
                     val_iou += iou
 
@@ -149,7 +149,8 @@ def train(model, train_dataloader, val_dataloader, device, config):
             logger.add_scalar('val/iou', val_iou, epoch)
             print(f'[{epoch:03d}] IoU: {val_iou:.6f} | best_iou: {best_iou:.6f}')
 
-            #scheduler.step(loss_val)
+            if(config["enable_scheduler"]):
+                scheduler.step(loss_val)
 
         model.train()
 
@@ -267,8 +268,25 @@ if __name__ == "__main__":
         'plot_train_images': True,
         'early_stopping': True,
         'early_stopping_patience': 10,
+        'enable_scheduler': False,
         'scheduler_factor': 0.1,
-        'scheduler_patience': 5
+        'scheduler_patience': 5,
+        'cl_weight': 0.5
     }
+
+    print("=======")
+    print("hparams")
+    print("=======")
+    print("lr: " + str(config["learning_rate"]))
+    print("cl_weight: " + str(config["cl_weight"]))
+    print("max_epochs: " + str(config["max_epochs"]))
+    print("num_views: " + str(config["num_views"]))
+    print("augmentation_json_flagnum_views: " + str(config["augmentation_json_flag"]))
+    print("augmentations_flag: " + str(config["augmentations_flag"]))
+    print("early_stopping: " + str(config["early_stopping"]))
+    print("early_stopping_patience: " + str(config["early_stopping_patience"]))
+    print("enable_scheduler: " + str(config["enable_scheduler"]))
+    print("scheduler_factor: " + str(config["scheduler_factor"]))
+    print("scheduler_patience: " + str(config["scheduler_patience"]))
 
     main(config)
