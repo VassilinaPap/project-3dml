@@ -89,7 +89,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
         # predictions -> [batch, 13]                     #
         # target -> [batch]                              #
         if(config['plot_train_images'] == True):
-            logger.add_figure('train/predictions vs. actuals', plot_classes_preds(batch['images'], predicted_labels, predictions_cl, target, batch['class']), epoch)
+            logger.add_figure('train/predictions vs. actuals', plot_classes_preds(batch['images'], predicted_labels, predictions_cl, target, batch['class'], config["plot_images_num"]), epoch)
 
         # Validation evaluation and logging
         if epoch % config['validate_every_n'] == (config['validate_every_n'] - 1):
@@ -110,7 +110,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
                     val_loss = config["cl_weight"] * val_loss_cl + (1 - config["cl_weight"]) * val_loss_rec
                     iou = ioU(predictions_rec.detach().clone(),batch_val['voxel'])
                     val_iou += iou
-
+                    target = batch_val['label']
 
                 total += predicted_labels.shape[0]
                 correct += (predicted_labels == batch_val["label"]).sum().item()
@@ -122,7 +122,7 @@ def train(model, train_dataloader, val_dataloader, device, config):
                 break
 
             logger.add_scalar('loss/val_classification', loss_val, epoch)
-            logger.add_figure('val/predictions vs. actuals', plot_classes_preds(batch_val['images'], predicted_labels, predictions_cl, target, batch['class']), epoch)
+            logger.add_figure('val/predictions vs. actuals', plot_classes_preds(batch_val['images'], predicted_labels, predictions_cl, target, batch['class'], config["plot_images_num"]), epoch)
 
             if loss_val < best_loss_val:
                 torch.save(model.state_dict(), f'./saved_models/{config["experiment_name"]}/model_best_loss.ckpt')
@@ -155,14 +155,14 @@ def train(model, train_dataloader, val_dataloader, device, config):
         model.train()
 
 # plot the images in the batch, along with predicted and true labels
-def plot_classes_preds(images, predicted_labels, predictions, labels, classes):
+def plot_classes_preds(images, predicted_labels, predictions, labels, classes, plot_images_num):
     # batch['images'] -> [batch, views, 3, 137, 137] # 
     fig = plt.figure(figsize=(10, 5))
 
     probs_max, _ = torch.max(F.softmax(predictions, dim=1), dim=1)
 
-    for idx in np.arange(4):
-        ax = fig.add_subplot(1, 4, idx+1, xticks=[], yticks=[])
+    for idx in np.arange(plot_images_num):
+        ax = fig.add_subplot(1, plot_images_num, idx+1, xticks=[], yticks=[])
         matplotlib_imshow(images[idx][0])
         ax.set_title("{0}, {1:.1f}%\n(label: {2})".format(
             ShapeNetDataset.index_to_class(predicted_labels[idx].item()),
@@ -248,11 +248,6 @@ if __name__ == "__main__":
     random.seed(15)
     np.random.seed(15)
 
-    # Seeds #
-    torch.manual_seed(15)
-    random.seed(15)
-    np.random.seed(15)
-
     config = {
         'experiment_name': 'mvcnn_overfitting',
         'device': 'cuda:0',
@@ -271,7 +266,8 @@ if __name__ == "__main__":
         'enable_scheduler': False,
         'scheduler_factor': 0.1,
         'scheduler_patience': 5,
-        'cl_weight': 0.5
+        'cl_weight': 0.5,
+        'plot_images_num': 4
     }
 
     print("=======")
@@ -288,5 +284,6 @@ if __name__ == "__main__":
     print("enable_scheduler: " + str(config["enable_scheduler"]))
     print("scheduler_factor: " + str(config["scheduler_factor"]))
     print("scheduler_patience: " + str(config["scheduler_patience"]))
+    print("plot_images_num: " + str(config["plot_images_num"]))
 
     main(config)
