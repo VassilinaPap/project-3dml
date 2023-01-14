@@ -62,13 +62,19 @@ def train(model, train_dataloader, val_dataloader, device, config):
 
             _, predicted_labels = torch.max(predictions_cl, dim=1)
             target = batch['label']
-            voxel = batch['voxel']
+            
             # TODO: Compute loss, Compute gradients, Update network parameters
             loss_cl = loss_criterion_cl(predictions_cl, target)
-            loss_rec = loss_criterion_rec(predictions_rec,voxel)
-            loss = config["cl_weight"] * loss_cl + (1 - config["cl_weight"]) *loss_rec
-            iou = ioU(predictions_rec.detach().clone(),voxel)
-            train_iou += iou
+
+            if config['flag_rec']:
+                voxel = batch['voxel']
+                loss_rec = loss_criterion_rec(predictions_rec,voxel)
+                loss = config["cl_weight"] * loss_cl + (1 - config["cl_weight"]) *loss_rec
+                iou = ioU(predictions_rec.detach().clone(),voxel)
+                train_iou += iou
+            else:
+                loss =  loss_cl
+
             loss.backward()
 
             # TODO: update network params
@@ -81,7 +87,6 @@ def train(model, train_dataloader, val_dataloader, device, config):
         print(f'[{epoch + 1:03d}] train_loss: {train_loss_running / len(train_dataloader):.6f}')
         logger.add_scalar('loss/train_classification', train_loss_running / len(train_dataloader), epoch)
         train_loss_running = 0.0
-        train_loss_running = 0.
         train_iou = 0.
 
         # batch['images'] -> [batch, views, 3, 137, 137] #
@@ -105,15 +110,21 @@ def train(model, train_dataloader, val_dataloader, device, config):
                 with torch.no_grad():
                     predictions_cl,predictions_rec = model(batch_val['images'])
                     _, predicted_labels = torch.max(predictions_cl, dim=1)
-                    val_loss_cl = loss_criterion_cl(predictions_cl, batch_val['label'])
-                    val_loss_rec = loss_criterion_rec(predictions_rec, batch_val['voxel'])
-                    val_loss = config["cl_weight"] * val_loss_cl + (1 - config["cl_weight"]) * val_loss_rec
-                    iou = ioU(predictions_rec.detach().clone(),batch_val['voxel'])
-                    val_iou += iou
                     target = batch_val['label']
+                    val_loss_cl = loss_criterion_cl(predictions_cl, target)
+                    
+
+                    if config['flag_rec']:
+                        val_loss_rec = loss_criterion_rec(predictions_rec, batch_val['voxel'])
+                        val_loss = config["cl_weight"] * val_loss_cl + (1 - config["cl_weight"]) * val_loss_rec
+                        iou = ioU(predictions_rec.detach().clone(),batch_val['voxel'])
+                        val_iou += iou
+                    else:
+                        val_loss =  val_loss_cl
+                    
 
                 total += predicted_labels.shape[0]
-                correct += (predicted_labels == batch_val["label"]).sum().item()
+                correct += (predicted_labels == target).sum().item()
 
             loss_val += val_loss.item()
             loss_val /= len(val_dataloader)
@@ -121,33 +132,34 @@ def train(model, train_dataloader, val_dataloader, device, config):
             if config['early_stopping'] == True and early_stopper.early_stop(loss_val):
                 break
 
-            logger.add_scalar('loss/val_classification', loss_val, epoch)
+            logger.add_scalar('val/loss', loss_val, epoch)
             logger.add_figure('val/predictions vs. actuals', plot_classes_preds(batch_val['images'], predicted_labels, predictions_cl, target, batch['class'], config["plot_images_num"]), epoch)
 
             if loss_val < best_loss_val:
                 torch.save(model.state_dict(), f'./saved_models/{config["experiment_name"]}/model_best_loss.ckpt')
                 best_loss_val = loss_val
 
-            print(f'[{epoch:03d}] val_loss: {loss_val:.6f} | best_loss_val: {best_loss_val:.6f}')
+            print(f'\n[{epoch + 1:03d}] val_loss: {loss_val:.6f} | best_loss_val: {best_loss_val:.6f}')
 
             accuracy = 100 * correct / total
-            logger.add_scalar('loss/val_acc', accuracy, epoch)
-
-            print('\nAccuracy:' + '{:5}'.format(correct) + '/' +
-                  '{:5}'.format(total) + ' (' +
-                  '{:4.2f}'.format(100.0 * correct / total) + '%)\n')
+            logger.add_scalar('val/acc', accuracy, epoch)
 
             if accuracy > best_accuracy:
                 torch.save(model.state_dict(), f'./saved_models/{config["experiment_name"]}/model_best_acc.ckpt')
                 best_accuracy = accuracy
 
-            val_iou /= len(val_dataloader)
-            if val_iou > best_iou:
-                torch.save(model.state_dict(), f'./saved_models/{config["experiment_name"]}/model_best_iou.ckpt')
-                best_iou = val_iou
+            print('Accuracy:' + '{:5}'.format(correct) + '/' +
+                  '{:5}'.format(total) + ' (' +
+                  '{:4.2f}'.format(100.0 * correct / total) + '%)' + ' | best_acc: ' + '{:2.2f}'.format(best_accuracy) + ' %')
 
-            logger.add_scalar('val/iou', val_iou, epoch)
-            print(f'[{epoch:03d}] IoU: {val_iou:.6f} | best_iou: {best_iou:.6f}')
+            if config['flag_rec']:
+                val_iou /= len(val_dataloader)
+                if val_iou > best_iou:
+                    torch.save(model.state_dict(), f'./saved_models/{config["experiment_name"]}/model_best_iou.ckpt')
+                    best_iou = val_iou
+
+                logger.add_scalar('val/iou', val_iou, epoch)
+                print(f'[{epoch + 1:03d}] IoU: {val_iou:.6f} | best_iou: {best_iou:.6f}\n')
 
             if(config["enable_scheduler"]):
                 scheduler.step(loss_val)
@@ -226,7 +238,7 @@ def main(config):
     )
 
     # Instantiate model
-    model = MVCNN(num_views=config['num_views'])
+    model = MVCNN(num_views=config['num_views'],flag_rec = config['flag_rec'], flag_multibranch = config['flag_multibranch'])
 
     # Load model if resuming from checkpoint
     if config['resume_ckpt'] is not None:
@@ -249,15 +261,15 @@ if __name__ == "__main__":
     np.random.seed(15)
 
     config = {
-        'experiment_name': 'mvcnn_overfitting',
+        'experiment_name': 'mvcnn_trainingmbranch3v',
         'device': 'cuda:0',
-        'is_overfit': True,
-        'batch_size': 8,
+        'is_overfit': False,
+        'batch_size': 64,
         'resume_ckpt': None,#'./saved_models/mvcnn_overfitting/model_best_acc.ckpt',
         'learning_rate': 0.00001,
-        'max_epochs': 350,
+        'max_epochs': 250,
         'validate_every_n': 5, # In epochs 
-        'num_views': 6,
+        'num_views': 3,
         'augmentation_json_flag': False,
         'augmentations_flag': False,
         'plot_train_images': True,
@@ -267,7 +279,10 @@ if __name__ == "__main__":
         'scheduler_factor': 0.1,
         'scheduler_patience': 5,
         'cl_weight': 0.5,
-        'plot_images_num': 4
+        'plot_images_num': 4,
+        'flag_rec': True,
+        'flag_multibranch':True
+
     }
 
     print("=======")
@@ -277,7 +292,7 @@ if __name__ == "__main__":
     print("cl_weight: " + str(config["cl_weight"]))
     print("max_epochs: " + str(config["max_epochs"]))
     print("num_views: " + str(config["num_views"]))
-    print("augmentation_json_flagnum_views: " + str(config["augmentation_json_flag"]))
+    print("augmentation_json_flag: " + str(config["augmentation_json_flag"]))
     print("augmentations_flag: " + str(config["augmentations_flag"]))
     print("early_stopping: " + str(config["early_stopping"]))
     print("early_stopping_patience: " + str(config["early_stopping_patience"]))

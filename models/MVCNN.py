@@ -3,12 +3,14 @@ import torch.nn as nn
 import torchvision.models as models
 
 class MVCNN(nn.Module):
-    def __init__(self, n_classes=13, encoder='mobilenet_v3', num_views=3):
+    def __init__(self, n_classes=13, encoder='mobilenet_v3', num_views=3, flag_rec = True, flag_multibranch = True):
         super(MVCNN, self).__init__()
 
         self.n_classes = n_classes
         self.num_views = num_views
         self.encoder = encoder
+        self.flag_rec = flag_rec
+        self.flag_multibranch = flag_multibranch
         self.decoder = None
         self.fuse_cl_rec = None
         self.decoder_volume = None
@@ -41,7 +43,7 @@ class MVCNN(nn.Module):
         )
 
         self.decoder = nn.Sequential(
-            # Layer 1: out [B, 120, 4, 4, 4]
+            # Layer 1: out [B, 64, 4, 4, 4]
             nn.ConvTranspose3d(in_channels=120, out_channels=64, kernel_size=4, stride=2, bias=False, padding=1),
             nn.BatchNorm3d(64),
             nn.ReLU(),
@@ -108,27 +110,56 @@ class MVCNN(nn.Module):
         #classification branch
         cl_ret = self.net_2(max_features) # [batch, classes]
         #print(cl_ret)
+        if not self.flag_rec:
+            return cl_ret, None
+        
         #reconstruction branch
-        #pred_labels = torch.argmax(cls_ret, dim=1)[:, None, None, None]
-        #print(torch.cat((max_features, cl_ret), dim=1).shape)
 
-        #print(max_features.shape)
-        max_features = max_features[:, :, None ]
-        #print(max_features.shape)
+        if not self.flag_multibranch: 
 
-        #print(cl_ret.shape)
-        cl_ret3d = cl_ret[:, :, None ]
+            max_features = max_features[:, :, None ]
+            #print(max_features.shape)
 
-        #print(cl_ret.shape)
-        #print(cl_ret3d.shape)
-        features = self.fuse_cl_rec(torch.cat((max_features, cl_ret3d), dim=1))
+            #print(cl_ret.shape)
+            cl_ret3d = cl_ret[:, :, None ]
 
-        features = features.view(batch_size, -1, 2, 2, 2) # [B, C, 2, 2, 2]
+            #print(cl_ret.shape)
+            #print(cl_ret3d.shape)
+            features = self.fuse_cl_rec(torch.cat((max_features, cl_ret3d), dim=1))
 
-        decoded_features = self.decoder(features)
-        #print(decoded_features.shape)
+            features = features.view(batch_size, -1, 2, 2, 2) # [B, C, 2, 2, 2]
 
-        generated_volume = self.decoder_volume(decoded_features) # [B, 1, 32, 32, 32]
-        rec_ret = generated_volume.squeeze()
+            decoded_features = self.decoder(features)
+            #print(decoded_features.shape)
+
+            generated_volume = self.decoder_volume(decoded_features) # [B, 1, 32, 32, 32]
+            rec_ret = generated_volume.squeeze()
+
+        else: #multibranch
+        
+            cl_ret3d = cl_ret[:, :, None ]
+
+            for index, feature in enumerate(feature_list):
+                feature = feature[:,:,None]
+                feature_list[index] = self.fuse_cl_rec(torch.cat((feature, cl_ret3d), dim=1))
+
+
+            generated_volume_list = []
+            for view_features in feature_list:
+                view_features = view_features.view(batch_size, -1, 2, 2, 2) # [B, C, 2, 2, 2]
+                decoded_features = self.decoder(view_features) # [B, 8, 32, 32, 32]
+                
+                generated_volume = self.decoder_volume(decoded_features) # [B, 1, 32, 32, 32]
+
+                #raw_decoded_features = torch.cat((raw_decoded_features, generated_volume), dim=1) # [B, 9, 32, 32, 32]
+
+                generated_volume_list.append(generated_volume.squeeze())
+                #raw_decoded_features_list.append(raw_decoded_features)
+
+            #rec_ret = torch.mean(torch.stack(generated_volume_list, dim=0), dim=0) # average pooling
+            rec_ret = generated_volume_list[0] # max pooling
+            for view_features in generated_volume_list[1:]:
+                rec_ret = torch.max(rec_ret, view_features)
+        
 
         return cl_ret, rec_ret
