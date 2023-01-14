@@ -51,6 +51,7 @@ def test(model, test_dataloader, device, config):
     best_batch_iou = -np.inf
     best_batch_iou_id = 0
     best_batch_iou_data = None
+    best_batch_iou_labels = None
     for batch_test in test_dataloader:
         ShapeNetDataset.move_batch_to_device(batch_test, device)
 
@@ -67,8 +68,7 @@ def test(model, test_dataloader, device, config):
             if(iou > best_batch_iou):
                 best_batch_iou = iou
                 best_batch_iou_data = predictions_rec.cpu().numpy()
-
-
+                best_batch_iou_labels = batch_test['label']
 
         total += predicted_labels.shape[0]
         correct += (predicted_labels == batch_test["label"]).sum().item()
@@ -88,15 +88,16 @@ def test(model, test_dataloader, device, config):
           '{:5}'.format(total) + ' (' +
           '{:4.2f}'.format(100.0 * correct / total) + '%)\n')
 
-
     test_iou /= len(test_dataloader)
 
     logger.add_scalar('test/iou', test_iou, 0)
     print(f'IoU: {test_iou:.6f}')
 
     # Save best batch recon #
+    print("Saving the reconstructions of the best batch with IoU: " + str(best_batch_iou))
     for i in range(config["batch_size"]):
-        save_voxel_grid(config["recon_folder"] + "/" + str(i)  + ".ply", best_batch_iou_data[i, :, :, :])
+        class_tmp = ShapeNetDataset.index_to_class(best_batch_iou_labels[i].item())
+        save_voxel_grid(config["recon_folder"] + "/" + str(class_tmp)  + ".ply", best_batch_iou_data[i, :, :, :])
 
 # plot the images in the batch, along with predicted and true labels
 def plot_classes_preds(images, predicted_labels, predictions, labels, classes, plot_images_num):
@@ -181,7 +182,7 @@ if __name__ == "__main__":
         'experiment_name': 'mvcnn_overfitting',
         'device': 'cuda:0',
         'batch_size': 8,
-        'resume_ckpt': '../training/saved_models/mvcnn_overfitting/model_best_acc.ckpt',
+        'resume_ckpt': '../training/saved_models/mvcnn_overfitting/model_best_iou.ckpt',
         'num_views': 2,
         'cl_weight': 0.5,
         'plot_images_num': 1,
