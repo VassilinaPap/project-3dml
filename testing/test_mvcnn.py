@@ -21,6 +21,7 @@ import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 
+from utils import read_as_3d_array, save_voxel_grid
 
 #plt.switch_backend('agg')
 
@@ -52,10 +53,9 @@ def fun_confusion_matrix(predictions, targets):
     plt.yticks(rotation=0)
 
     plt.title('Confusion Matrix', fontsize=20)
-    
+
     plt.savefig('ConMat.png')
     plt.show()
-    
 
 def ioU(predictions_rec, voxel):
     # prob to vox grid
@@ -82,6 +82,10 @@ def test(model, test_dataloader, device, config):
     total = 0.0
     correct = 0.0
 
+    best_batch_iou = -np.inf
+    best_batch_iou_id = 0
+    best_batch_iou_data = None
+    best_batch_iou_labels = None
     predictions_list= None
     target_list= None
     for batch_test in test_dataloader:
@@ -107,6 +111,11 @@ def test(model, test_dataloader, device, config):
             else:
                 target_list = torch.cat((target_list, target), dim=0)
 
+            if(iou > best_batch_iou):
+                best_batch_iou = iou
+                best_batch_iou_data = predictions_rec.cpu().numpy()
+                best_batch_iou_labels = batch_test['label']
+
         total += predicted_labels.shape[0]
         correct += (predicted_labels == batch_test["label"]).sum().item()
 
@@ -120,18 +129,23 @@ def test(model, test_dataloader, device, config):
 
     accuracy = 100 * correct / total
     logger.add_scalar('loss/test_acc', accuracy, 0)
-    
+
     fun_confusion_matrix(predictions_list.cpu().numpy(), target_list.cpu().numpy())
 
     print('\nAccuracy:' + '{:5}'.format(correct) + '/' +
           '{:5}'.format(total) + ' (' +
           '{:4.2f}'.format(100.0 * correct / total) + '%)\n')
 
-
     test_iou /= len(test_dataloader)
 
     logger.add_scalar('test/iou', test_iou, 0)
     print(f'IoU: {test_iou:.6f}')
+
+    # Save best batch recon #
+    print("Saving the reconstructions of the best batch with IoU: " + str(best_batch_iou))
+    for i in range(config["batch_size"]):
+        class_tmp = ShapeNetDataset.index_to_class(best_batch_iou_labels[i].item())
+        save_voxel_grid(config["recon_folder"] + "/" + str(class_tmp)  + ".ply", best_batch_iou_data[i, :, :, :])
 
 # plot the images in the batch, along with predicted and true labels
 def plot_classes_preds(images, predicted_labels, predictions, labels, classes, plot_images_num):
@@ -155,23 +169,6 @@ def matplotlib_imshow(img):
     img = img.permute(1, 2, 0).numpy().astype("uint8")
 
     plt.imshow(img)
-
-class EarlyStopper:
-    def __init__(self, patience=1, min_delta=0):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.min_validation_loss = np.inf
-
-    def early_stop(self, validation_loss):
-        if validation_loss < self.min_validation_loss:
-            self.min_validation_loss = validation_loss
-            self.counter = 0
-        elif validation_loss > (self.min_validation_loss + self.min_delta):
-            self.counter += 1
-            if self.counter >= self.patience:
-                return True
-        return False
 
 ##################################
 
@@ -219,8 +216,11 @@ if __name__ == "__main__":
         'resume_ckpt': '../training/saved_models/mvcnn_trainingmbranch3v/model_best_acc.ckpt',
         'num_views': 1,
         'cl_weight': 0.5,
-        'plot_images_num': 1
+        'plot_images_num': 1,
+        'recon_folder': "./recon"
     }
+
+    Path(config["recon_folder"]).mkdir(exist_ok=True, parents=True)
 
     print("=======")
     print("hparams")
