@@ -18,10 +18,44 @@ import matplotlib.pyplot as plt
 import cv2
 import random
 import torch.nn.functional as F
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
 
 from utils import read_as_3d_array, save_voxel_grid
 
-plt.switch_backend('agg')
+#plt.switch_backend('agg')
+
+def fun_confusion_matrix(predictions, targets):
+    ### Confusion Matrix
+    cm = confusion_matrix(targets, predictions)
+
+    ## Get Class Labels
+    # labels = le.classes_
+    # class_names = labels
+
+    class_names = []
+    for idx in range(13):
+        class_names.append(ShapeNetDataset.index_to_class(idx))
+
+    # Plot confusion matrix in a beautiful manner
+    fig = plt.figure(figsize=(16, 14))
+    ax= plt.subplot()
+    sns.heatmap(cm, annot=True, ax = ax, fmt = 'g'); #annot=True to annotate cells
+    # labels, title and ticks
+    ax.set_xlabel('Predicted', fontsize=20)
+    ax.xaxis.set_label_position('bottom')
+    plt.xticks(rotation=90)
+    ax.xaxis.set_ticklabels(class_names, fontsize = 10)
+    ax.xaxis.tick_bottom()
+
+    ax.set_ylabel('True', fontsize=20)
+    ax.yaxis.set_ticklabels(class_names, fontsize = 10)
+    plt.yticks(rotation=0)
+
+    plt.title('Confusion Matrix', fontsize=20)
+
+    plt.savefig('ConMat.png')
+    plt.show()
 
 def ioU(predictions_rec, voxel):
     # prob to vox grid
@@ -52,18 +86,30 @@ def test(model, test_dataloader, device, config):
     best_batch_iou_id = 0
     best_batch_iou_data = None
     best_batch_iou_labels = None
+    predictions_list= None
+    target_list= None
     for batch_test in test_dataloader:
         ShapeNetDataset.move_batch_to_device(batch_test, device)
 
         with torch.no_grad():
             predictions_cl,predictions_rec = model(batch_test['images'])
             _, predicted_labels = torch.max(predictions_cl, dim=1)
+            if(predictions_list == None):
+                predictions_list = predicted_labels
+            else:
+                predictions_list = torch.cat((predictions_list, predicted_labels), dim=0)
+            
             test_loss_cl = loss_criterion_cl(predictions_cl, batch_test['label'])
             test_loss_rec = loss_criterion_rec(predictions_rec, batch_test['voxel'])
             test_loss = config["cl_weight"] * test_loss_cl + (1 - config["cl_weight"]) * test_loss_rec
             iou = ioU(predictions_rec.detach().clone(),batch_test['voxel'])
             test_iou += iou
             target = batch_test['label']
+         
+            if(target_list == None):
+                target_list = target
+            else:
+                target_list = torch.cat((target_list, target), dim=0)
 
             if(iou > best_batch_iou):
                 best_batch_iou = iou
@@ -83,6 +129,8 @@ def test(model, test_dataloader, device, config):
 
     accuracy = 100 * correct / total
     logger.add_scalar('loss/test_acc', accuracy, 0)
+
+    fun_confusion_matrix(predictions_list.cpu().numpy(), target_list.cpu().numpy())
 
     print('\nAccuracy:' + '{:5}'.format(correct) + '/' +
           '{:5}'.format(total) + ' (' +
@@ -122,23 +170,6 @@ def matplotlib_imshow(img):
 
     plt.imshow(img)
 
-class EarlyStopper:
-    def __init__(self, patience=1, min_delta=0):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.min_validation_loss = np.inf
-
-    def early_stop(self, validation_loss):
-        if validation_loss < self.min_validation_loss:
-            self.min_validation_loss = validation_loss
-            self.counter = 0
-        elif validation_loss > (self.min_validation_loss + self.min_delta):
-            self.counter += 1
-            if self.counter >= self.patience:
-                return True
-        return False
-
 ##################################
 
 def main(config):
@@ -161,7 +192,7 @@ def main(config):
     )
 
     # Instantiate model
-    model = MVCNN(num_views=config['num_views'])
+    model = MVCNN(num_views=config['num_views'],flag_rec = True, flag_multibranch = True)
 
     model.load_state_dict(torch.load(config['resume_ckpt'], map_location='cpu'))
 
@@ -179,11 +210,11 @@ if __name__ == "__main__":
     np.random.seed(15)
 
     config = {
-        'experiment_name': 'mvcnn_overfitting',
+        'experiment_name': 'mvcnn_overfittinghellowarld',
         'device': 'cuda:0',
-        'batch_size': 8,
-        'resume_ckpt': '../training/saved_models/mvcnn_overfitting/model_best_iou.ckpt',
-        'num_views': 2,
+        'batch_size': 128,
+        'resume_ckpt': '../training/saved_models/mvcnn_trainingmbranch3v/model_best_acc.ckpt',
+        'num_views': 1,
         'cl_weight': 0.5,
         'plot_images_num': 1,
         'recon_folder': "./recon"
