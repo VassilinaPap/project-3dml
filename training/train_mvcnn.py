@@ -269,7 +269,7 @@ if __name__ == "__main__":
         'learning_rate': 0.00001,
         'max_epochs': 250,
         'validate_every_n': 5, # In epochs 
-        'num_views': 3,
+        'num_views': 24,
         'augmentation_json_flag': False,
         'augmentations_flag': False,
         'plot_train_images': True,
@@ -279,7 +279,7 @@ if __name__ == "__main__":
         'scheduler_factor': 0.1,
         'scheduler_patience': 5,
         'cl_weight': 0.5,
-        'plot_images_num': 4,
+        'plot_images_num': 1,
         'flag_rec': True,
         'flag_multibranch':True
 

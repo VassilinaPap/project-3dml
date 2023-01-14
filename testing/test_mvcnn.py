@@ -19,6 +19,8 @@ import cv2
 import random
 import torch.nn.functional as F
 
+from utils import read_as_3d_array, save_voxel_grid
+
 plt.switch_backend('agg')
 
 def ioU(predictions_rec, voxel):
@@ -45,6 +47,7 @@ def test(model, test_dataloader, device, config):
     test_iou = 0.
     total = 0.0
     correct = 0.0
+    save_recon_num_id = 0
     for batch_test in test_dataloader:
         ShapeNetDataset.move_batch_to_device(batch_test, device)
 
@@ -57,6 +60,11 @@ def test(model, test_dataloader, device, config):
             iou = ioU(predictions_rec.detach().clone(),batch_test['voxel'])
             test_iou += iou
             target = batch_test['label']
+
+            if(save_recon_num_id != config["save_recon_num"] and np.random.binomial(1, 0.5, 1)[0] >= 0.5):
+                recon_id = np.random.randint(0, config["batch_size"] - 1, 1)[0]
+                save_voxel_grid(config["recon_folder"] + "/" + str(save_recon_num_id)  + ".ply", predictions_rec.cpu().numpy()[recon_id, :, :, :])
+                save_recon_num_id += 1
 
         total += predicted_labels.shape[0]
         correct += (predicted_labels == batch_test["label"]).sum().item()
@@ -168,8 +176,12 @@ if __name__ == "__main__":
         'resume_ckpt': '../training/saved_models/mvcnn_overfitting/model_best_acc.ckpt',
         'num_views': 2,
         'cl_weight': 0.5,
-        'plot_images_num': 1
+        'plot_images_num': 1,
+        'save_recon_num': 30,
+        'recon_folder': "./recon"
     }
+
+    Path(config["recon_folder"]).mkdir(exist_ok=True, parents=True)
 
     print("=======")
     print("hparams")
