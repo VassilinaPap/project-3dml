@@ -47,7 +47,10 @@ def test(model, test_dataloader, device, config):
     test_iou = 0.
     total = 0.0
     correct = 0.0
-    save_recon_num_id = 0
+
+    best_batch_iou = -np.inf
+    best_batch_iou_id = 0
+    best_batch_iou_data = None
     for batch_test in test_dataloader:
         ShapeNetDataset.move_batch_to_device(batch_test, device)
 
@@ -61,10 +64,11 @@ def test(model, test_dataloader, device, config):
             test_iou += iou
             target = batch_test['label']
 
-            if(save_recon_num_id != config["save_recon_num"] and np.random.binomial(1, 0.5, 1)[0] >= 0.5):
-                recon_id = np.random.randint(0, config["batch_size"] - 1, 1)[0]
-                save_voxel_grid(config["recon_folder"] + "/" + str(save_recon_num_id)  + ".ply", predictions_rec.cpu().numpy()[recon_id, :, :, :])
-                save_recon_num_id += 1
+            if(iou > best_batch_iou):
+                best_batch_iou = iou
+                best_batch_iou_data = predictions_rec.cpu().numpy()
+
+
 
         total += predicted_labels.shape[0]
         correct += (predicted_labels == batch_test["label"]).sum().item()
@@ -89,6 +93,10 @@ def test(model, test_dataloader, device, config):
 
     logger.add_scalar('test/iou', test_iou, 0)
     print(f'IoU: {test_iou:.6f}')
+
+    # Save best batch recon #
+    for i in range(config["batch_size"]):
+        save_voxel_grid(config["recon_folder"] + "/" + str(i)  + ".ply", best_batch_iou_data[i, :, :, :])
 
 # plot the images in the batch, along with predicted and true labels
 def plot_classes_preds(images, predicted_labels, predictions, labels, classes, plot_images_num):
@@ -177,7 +185,6 @@ if __name__ == "__main__":
         'num_views': 2,
         'cl_weight': 0.5,
         'plot_images_num': 1,
-        'save_recon_num': 30,
         'recon_folder': "./recon"
     }
 
