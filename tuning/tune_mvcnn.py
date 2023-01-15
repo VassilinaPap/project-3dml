@@ -33,28 +33,30 @@ def ioU(predictions_rec, voxel):
 
 def objective(trial):
     config = {
-            'experiment_name': 'mvcnn_overfitting',
+            'experiment_name': 'mvcnn_tuningsb',
             'device': 'cuda:0',
-            'is_overfit': True,
-            'batch_size': 8,
+            'is_overfit': False,
+            'batch_size': 64,
             'resume_ckpt': None,
             'learning_rate': 0.00001,
             'max_epochs': 5,
             'validate_every_n': 5, # In epochs 
-            'num_views': 6,
+            'num_views': 3,
             'augmentation_json_flag': False,
             'augmentations_flag': False,
             'plot_train_images': True,
-            'early_stopping': True,
+            'early_stopping': False,
             'early_stopping_patience': 10,
             'scheduler_factor': 0.1,
             'scheduler_patience': 5,
-            "cl_weight": 0.5
+            "cl_weight": 0.5,
+            'flag_rec':True,
+            'flag_multibranch':False
     }
 
     config['learning_rate'] = trial.suggest_loguniform('learning_rate', 1e-6, 1e-3)
-    config['batch_size'] = trial.suggest_categorical('batch_size', [4, 8])
-    config['cl_weight'] = trial.suggest_float('cl_weight', 0.0, 1.0)
+    #config['batch_size'] = trial.suggest_categorical('batch_size', [4, 8])
+    #config['cl_weight'] = trial.suggest_float('cl_weight', 0.0, 1.0)
 
     # Declare device #
     device = torch.device('cpu')
@@ -84,7 +86,7 @@ def objective(trial):
     )
 
     # Instantiate model #
-    model = MVCNN(num_views=config['num_views'])
+    model = MVCNN(num_views=config['num_views'],flag_rec = config['flag_rec'],flag_multibranch = config['flag_multibranch'])
 
     # Move model to specified device #
     model.to(device)
@@ -113,13 +115,19 @@ def objective(trial):
 
             _, predicted_labels = torch.max(predictions_cl, dim=1)
             target = batch['label']
-            voxel = batch['voxel']
-            # TODO: Compute loss, Compute gradients, Update network parameters
             loss_cl = loss_criterion_cl(predictions_cl, target)
-            loss_rec = loss_criterion_rec(predictions_rec,voxel)
-            loss = config["cl_weight"] * loss_cl + (1 - config["cl_weight"]) * loss_rec
-            iou = ioU(predictions_rec.detach().clone(),voxel)
-            train_iou += iou
+
+            if config['flag_rec']:
+                voxel = batch['voxel']
+                # TODO: Compute loss, Compute gradients, Update network parameters
+                
+                loss_rec = loss_criterion_rec(predictions_rec,voxel)
+                loss = config["cl_weight"] * loss_cl + (1 - config["cl_weight"]) * loss_rec
+                iou = ioU(predictions_rec.detach().clone(),voxel)
+                train_iou += iou
+            else:
+                loss = loss_cl
+
             loss.backward()
 
             # TODO: update network params
@@ -129,7 +137,8 @@ def objective(trial):
             train_loss_running += loss.item()
             iteration = epoch * len(train_dataloader) + batch_idx
 
-        train_loss_running = 0.0
+        # train_loss_running = 0.0
+        # train_iou = 0
 
         # Validation evaluation #
         if epoch % config['validate_every_n'] == (config['validate_every_n'] - 1):
@@ -145,15 +154,20 @@ def objective(trial):
                 with torch.no_grad():
                     predictions_cl,predictions_rec = model(batch_val['images'])
                     _, predicted_labels = torch.max(predictions_cl, dim=1)
-                    val_loss_cl = loss_criterion_cl(predictions_cl, batch_val['label'])
-                    val_loss_rec = loss_criterion_rec(predictions_rec, batch_val['voxel'])
-                    val_loss = 0.5 * val_loss_cl + 0.5 * val_loss_rec
-                    iou = ioU(predictions_rec.detach().clone(),batch_val['voxel'])
-                    val_iou += iou
+                    target = batch_val['label']
+                    val_loss_cl = loss_criterion_cl(predictions_cl, target)
+
+                    if config['flag_rec']:
+                        val_loss_rec = loss_criterion_rec(predictions_rec, batch_val['voxel'])
+                        val_loss = 0.5 * val_loss_cl + 0.5 * val_loss_rec
+                        iou = ioU(predictions_rec.detach().clone(),batch_val['voxel'])
+                        val_iou += iou
+                    else:
+                        val_loss = val_loss_cl
 
 
                 total += predicted_labels.shape[0]
-                correct += (predicted_labels == batch_val["label"]).sum().item()
+                correct += (predicted_labels == target).sum().item()
 
             loss_val += val_loss.item()
             loss_val /= len(val_dataloader)

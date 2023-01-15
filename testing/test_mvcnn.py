@@ -98,26 +98,30 @@ def test(model, test_dataloader, device, config):
                 predictions_list = predicted_labels
             else:
                 predictions_list = torch.cat((predictions_list, predicted_labels), dim=0)
-            
-            test_loss_cl = loss_criterion_cl(predictions_cl, batch_test['label'])
-            test_loss_rec = loss_criterion_rec(predictions_rec, batch_test['voxel'])
-            test_loss = config["cl_weight"] * test_loss_cl + (1 - config["cl_weight"]) * test_loss_rec
-            iou = ioU(predictions_rec.detach().clone(),batch_test['voxel'])
-            test_iou += iou
             target = batch_test['label']
+            test_loss_cl = loss_criterion_cl(predictions_cl, target)
+            
+            if config['flag_rec']:
+                test_loss_rec = loss_criterion_rec(predictions_rec, batch_test['voxel'])
+                test_loss = config["cl_weight"] * test_loss_cl + (1 - config["cl_weight"]) * test_loss_rec
+                iou = ioU(predictions_rec.detach().clone(),batch_test['voxel'])
+                test_iou += iou
+            else:
+                test_loss = test_loss_cl
+
          
             if(target_list == None):
                 target_list = target
             else:
                 target_list = torch.cat((target_list, target), dim=0)
-
-            if(iou > best_batch_iou):
-                best_batch_iou = iou
-                best_batch_iou_data = predictions_rec.cpu().numpy()
-                best_batch_iou_labels = batch_test['label']
+            if config['flag_rec']:
+                if(iou > best_batch_iou):
+                    best_batch_iou = iou
+                    best_batch_iou_data = predictions_rec.cpu().numpy()
+                    best_batch_iou_labels = target
 
         total += predicted_labels.shape[0]
-        correct += (predicted_labels == batch_test["label"]).sum().item()
+        correct += (predicted_labels == target).sum().item()
 
     loss_test += test_loss.item()
     loss_test /= len(test_dataloader)
@@ -136,16 +140,17 @@ def test(model, test_dataloader, device, config):
           '{:5}'.format(total) + ' (' +
           '{:4.2f}'.format(100.0 * correct / total) + '%)\n')
 
-    test_iou /= len(test_dataloader)
+    if config['flag_rec']:
+        test_iou /= len(test_dataloader)
 
-    logger.add_scalar('test/iou', test_iou, 0)
-    print(f'IoU: {test_iou:.6f}')
+        logger.add_scalar('test/iou', test_iou, 0)
+        print(f'IoU: {test_iou:.6f}')
 
-    # Save best batch recon #
-    print("Saving the reconstructions of the best batch with IoU: " + str(best_batch_iou))
-    for i in range(config["batch_size"]):
-        class_tmp = ShapeNetDataset.index_to_class(best_batch_iou_labels[i].item())
-        save_voxel_grid(config["recon_folder"] + "/" + str(class_tmp)  + ".ply", best_batch_iou_data[i, :, :, :])
+        # Save best batch recon #
+        print("Saving the reconstructions of the best batch with IoU: " + str(best_batch_iou))
+        for i in range(config["batch_size"]):
+            class_tmp = ShapeNetDataset.index_to_class(best_batch_iou_labels[i].item())
+            save_voxel_grid(config["recon_folder"] + "/" + str(class_tmp)  + ".ply", best_batch_iou_data[i, :, :, :])
 
 # plot the images in the batch, along with predicted and true labels
 def plot_classes_preds(images, predicted_labels, predictions, labels, classes, plot_images_num):
@@ -192,7 +197,7 @@ def main(config):
     )
 
     # Instantiate model
-    model = MVCNN(num_views=config['num_views'],flag_rec = True, flag_multibranch = True)
+    model = MVCNN(num_views=config['num_views'],flag_rec = config['flag_rec'], flag_multibranch = config['flag_multibranch'])
 
     model.load_state_dict(torch.load(config['resume_ckpt'], map_location='cpu'))
 
@@ -212,12 +217,14 @@ if __name__ == "__main__":
     config = {
         'experiment_name': 'mvcnn_overfittinghellowarld',
         'device': 'cuda:0',
-        'batch_size': 128,
+        'batch_size': 64,
         'resume_ckpt': '../training/saved_models/mvcnn_trainingmbranch3v/model_best_acc.ckpt',
-        'num_views': 1,
+        'num_views': 3,
         'cl_weight': 0.5,
         'plot_images_num': 1,
-        'recon_folder': "./recon"
+        'recon_folder': "./recon",
+        'flag_rec':True,
+        'flag_multribranch':True
     }
 
     Path(config["recon_folder"]).mkdir(exist_ok=True, parents=True)

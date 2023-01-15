@@ -86,8 +86,8 @@ def train(model, train_dataloader, val_dataloader, device, config):
 
         print(f'[{epoch + 1:03d}] train_loss: {train_loss_running / len(train_dataloader):.6f}')
         logger.add_scalar('loss/train_classification', train_loss_running / len(train_dataloader), epoch)
-        train_loss_running = 0.0
-        train_iou = 0.
+        #train_loss_running = 0.0
+        #train_iou = 0.
 
         # batch['images'] -> [batch, views, 3, 137, 137] #
         # predicted_labels -> [batch]                    #
