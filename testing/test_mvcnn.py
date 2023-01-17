@@ -54,7 +54,7 @@ def fun_confusion_matrix(predictions, targets):
 
     plt.title('Confusion Matrix', fontsize=20)
 
-    plt.savefig('ConMat.png')
+    plt.savefig('ConMatlossmb1.png')
     plt.show()
 
 def ioU(predictions_rec, voxel):
@@ -119,6 +119,7 @@ def test(model, test_dataloader, device, config):
                     best_batch_iou = iou
                     best_batch_iou_data = predictions_rec.cpu().numpy()
                     best_batch_iou_labels = target
+                    best_target_shape = target.shape[0]
 
         total += predicted_labels.shape[0]
         correct += (predicted_labels == target).sum().item()
@@ -148,7 +149,9 @@ def test(model, test_dataloader, device, config):
 
         # Save best batch recon #
         print("Saving the reconstructions of the best batch with IoU: " + str(best_batch_iou))
-        for i in range(config["batch_size"]):
+        #print(best_target_shape)
+        #print(config["batch_size"])
+        for i in range(best_target_shape):
             class_tmp = ShapeNetDataset.index_to_class(best_batch_iou_labels[i].item())
             save_voxel_grid(config["recon_folder"] + "/" + str(class_tmp)  + ".ply", best_batch_iou_data[i, :, :, :])
 
@@ -195,7 +198,7 @@ def main(config):
         num_workers=4,
         pin_memory=True,
     )
-
+    #print(len(test_dataset))
     # Instantiate model
     model = MVCNN(num_views=config['num_views'],flag_rec = config['flag_rec'], flag_multibranch = config['flag_multibranch'])
 
@@ -215,16 +218,16 @@ if __name__ == "__main__":
     np.random.seed(15)
 
     config = {
-        'experiment_name': 'mvcnn_overfittinghellowarld',
+        'experiment_name': 'mvcnn_mbexp1_test',
         'device': 'cuda:0',
         'batch_size': 64,
-        'resume_ckpt': '../training/saved_models/mvcnn_trainingmbranch3v/model_best_acc.ckpt',
-        'num_views': 3,
+        'resume_ckpt': '../training/saved_models/mvcnn_mbexp1/model_best_loss.ckpt',
+        'num_views': 1,
         'cl_weight': 0.5,
         'plot_images_num': 1,
-        'recon_folder': "./recon",
+        'recon_folder': "./reconmbexp1/reconlossmb1",
         'flag_rec':True,
-        'flag_multribranch':True
+        'flag_multibranch':True
     }
 
     Path(config["recon_folder"]).mkdir(exist_ok=True, parents=True)

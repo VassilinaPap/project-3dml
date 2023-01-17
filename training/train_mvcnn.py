@@ -260,16 +260,18 @@ if __name__ == "__main__":
     random.seed(15)
     np.random.seed(15)
 
+    #best learning_rate single_branch: 0.0008601942541589136
+    #best learning_rate multi_branch:  0.0006151913457845259
     config = {
-        'experiment_name': 'mvcnn_trainingmbranch3v',
+        'experiment_name': 'mvcnn_mbexp1',
         'device': 'cuda:0',
         'is_overfit': False,
         'batch_size': 64,
         'resume_ckpt': None,#'./saved_models/mvcnn_overfitting/model_best_acc.ckpt',
-        'learning_rate': 0.00001,
+        'learning_rate': 0.0006151913457845259,
         'max_epochs': 250,
         'validate_every_n': 5, # In epochs 
-        'num_views': 24,
+        'num_views': 3,
         'augmentation_json_flag': False,
         'augmentations_flag': False,
         'plot_train_images': True,

@@ -33,7 +33,7 @@ def ioU(predictions_rec, voxel):
 
 def objective(trial):
     config = {
-            'experiment_name': 'mvcnn_tuningsb',
+            'experiment_name': 'mvcnn_tuningmb',
             'device': 'cuda:0',
             'is_overfit': False,
             'batch_size': 64,
@@ -51,7 +51,7 @@ def objective(trial):
             'scheduler_patience': 5,
             "cl_weight": 0.5,
             'flag_rec':True,
-            'flag_multibranch':False
+            'flag_multibranch':True
     }
 
     config['learning_rate'] = trial.suggest_loguniform('learning_rate', 1e-6, 1e-3)
