@@ -42,6 +42,16 @@ class MVCNN(nn.Module):
             nn.ReLU()
         )
 
+        self.diff_fuse = nn.ModuleList()
+        for i in range(num_views):
+            self.diff_fuse.append(
+                nn.Sequential(
+            nn.Conv1d(in_channels=960+self.n_classes, out_channels=960, kernel_size=1, padding=0),
+            nn.BatchNorm1d(960),
+            nn.ReLU()
+            )
+        )
+
         self.decoder = nn.Sequential(
             # Layer 1: out [B, 64, 4, 4, 4]
             nn.ConvTranspose3d(in_channels=120, out_channels=64, kernel_size=4, stride=2, bias=False, padding=1),
@@ -66,6 +76,38 @@ class MVCNN(nn.Module):
             nn.Sigmoid() # to deal with problem as a binary classification task
         )
 
+        self.diff_branches = nn.ModuleList()
+        for i in range(num_views):
+            self.diff_branches.append(
+                nn.Sequential(
+            # Layer 1: out [B, 64, 4, 4, 4]
+            nn.ConvTranspose3d(in_channels=120, out_channels=64, kernel_size=4, stride=2, bias=False, padding=1),
+            nn.BatchNorm3d(64),
+            nn.ReLU(),
+            # Layer 2: out [B, 32, 8, 8, 8]
+            nn.ConvTranspose3d(in_channels=64, out_channels=32, kernel_size=4, stride=2, bias=False, padding=1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            # Layer 3: out [B, 16, 16, 16, 16]
+            nn.ConvTranspose3d(in_channels=32, out_channels=16, kernel_size=4, stride=2, bias=False, padding=1),
+            nn.BatchNorm3d(16),
+            nn.ReLU(),
+            # Layer 4: out [B, 8, 32, 32, 32]
+            nn.ConvTranspose3d(in_channels=16, out_channels=8, kernel_size=4, stride=2, bias=False, padding=1),
+            nn.BatchNorm3d(8),
+            nn.ReLU(),
+        )
+            )
+
+        self.diff_volume = nn.ModuleList()
+        for i in range(num_views):
+            self.diff_volume.append(
+                nn.Sequential(
+            nn.Conv3d(in_channels=8, out_channels=1, kernel_size=1, bias=False),
+            nn.Sigmoid() # to deal with problem as a binary classification task
+        )
+
+            )
 
 
     def forward(self, x):
@@ -141,15 +183,16 @@ class MVCNN(nn.Module):
 
             for index, feature in enumerate(feature_list):
                 feature = feature[:,:,None]
-                feature_list[index] = self.fuse_cl_rec(torch.cat((feature, cl_ret3d), dim=1))
+                feature_list[index] = self.diff_fuse[index](torch.cat((feature, cl_ret3d), dim=1))
 
 
             generated_volume_list = []
-            for view_features in feature_list:
+            for idx, view_features in enumerate(feature_list):
                 view_features = view_features.view(batch_size, -1, 2, 2, 2) # [B, C, 2, 2, 2]
-                decoded_features = self.decoder(view_features) # [B, 8, 32, 32, 32]
+
+                decoded_features = self.diff_branches[idx](view_features) # [B, 8, 32, 32, 32]
                 
-                generated_volume = self.decoder_volume(decoded_features) # [B, 1, 32, 32, 32]
+                generated_volume = self.diff_volume[idx](decoded_features) # [B, 1, 32, 32, 32]
 
                 #raw_decoded_features = torch.cat((raw_decoded_features, generated_volume), dim=1) # [B, 9, 32, 32, 32]
 
