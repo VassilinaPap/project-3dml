@@ -54,7 +54,8 @@ class ShapeNetDataset(Dataset):
 
         # Load augmentation json file. "class_1": "class_2", when having class_1 add some samples from class_2 #
         if(augmentation_json_flag):
-            with open("./augmentation.json") as json_file:
+            #print(os.path.join(os.path.dirname(os.path.abspath(__file__)), "augmentation.json"))
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "augmentation.json")) as json_file:
                 self.augmentation_json_dict = json.load(json_file)
 
     def __len__(self):
@@ -74,7 +75,9 @@ class ShapeNetDataset(Dataset):
         # How many views to sample from the max_views #
         images_idxs = random.sample(range(self.max_views), self.num_views)
 
-        if(self.augmentation_json_flag):
+
+        pick = np.random.binomial(1, 0.3, 1)[0]
+        if(self.augmentation_json_flag and pick == 1):
 
             # Find other class to add if exits in json #
             other_class = None
@@ -147,10 +150,10 @@ class ShapeNetDataset(Dataset):
 
         # Visualize #
         #if class_label == "airplane":
-        #for image in images:
-        #   image = ShapeNetDataset.denormalize_image(image) # Data are normalized for ImageNet undo 
-        #   cv2.imshow("test", image.permute(1,2,0).numpy().astype("uint8")) # uint8!!
-        #   cv2.waitKey(0)
+        # for image in images:
+        #    image = ShapeNetDataset.denormalize_image(image) # Data are normalized for ImageNet undo 
+        #    cv2.imshow("test", image.permute(1,2,0).numpy().astype("uint8")) # uint8!!
+        #    cv2.waitKey(0)
 
         # Voxel #
         path_voxel = self.data_dir + self.voxels_dir + str(curr_id) +  "/model.binvox"
@@ -181,7 +184,7 @@ class ShapeNetDataset(Dataset):
         pick = np.random.binomial(1, prob, 1)[0]
 
         if(pick == 1):
-            transforms = T.Compose([T.GaussianBlur(kernel_size=(5,9), sigma=(4,5))]) #, T.ColorJitter(brightness=(0.0,0.0), hue=(0.0,0.0))])
+            transforms = T.Compose([T.GaussianBlur(kernel_size=(3,3), sigma=(0.1,2)),T.ColorJitter(hue=(-0.3, 0.3)), T.RandomErasing(p=1.0, scale=(0.005, 0.005))])
         else:
             transforms = None
 

@@ -228,7 +228,7 @@ def main(config):
         pin_memory=True,
     )
 
-    val_dataset = ShapeNetDataset(split='val' if not config['is_overfit'] else 'overfit', num_views=config['num_views'], augmentation_json_flag=config['augmentation_json_flag'], augmentations_flag=config['augmentations_flag'])
+    val_dataset = ShapeNetDataset(split='val' if not config['is_overfit'] else 'overfit', num_views=config['num_views'], augmentation_json_flag= False, augmentations_flag= False)
     val_dataloader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=config['batch_size'],
@@ -262,17 +262,18 @@ if __name__ == "__main__":
 
     #best learning_rate single_branch: 0.0008601942541589136
     #best learning_rate multi_branch:  0.0006151913457845259
+    #best learning_rate true multi_branch: 0.0002754373776181465
     config = {
-        'experiment_name': 'mvcnn_mbexp1',
+        'experiment_name': 'mvcnn_sbexp3_aug2_correct',
         'device': 'cuda:0',
         'is_overfit': False,
         'batch_size': 64,
         'resume_ckpt': None,#'./saved_models/mvcnn_overfitting/model_best_acc.ckpt',
-        'learning_rate': 0.0006151913457845259,
+        'learning_rate': 0.0008601942541589136,
         'max_epochs': 250,
         'validate_every_n': 5, # In epochs 
         'num_views': 3,
-        'augmentation_json_flag': False,
+        'augmentation_json_flag': True,
         'augmentations_flag': False,
         'plot_train_images': True,
         'early_stopping': True,
@@ -283,7 +284,7 @@ if __name__ == "__main__":
         'cl_weight': 0.5,
         'plot_images_num': 1,
         'flag_rec': True,
-        'flag_multibranch':True
+        'flag_multibranch':False
 
     }
 

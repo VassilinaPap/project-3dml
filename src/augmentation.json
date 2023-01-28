@@ -1,5 +1,6 @@
 {
-  "airplane": "bench",
-  "chair": "car", 
-  "samples": 2
+  "airplane": "watercraft",
+  "bench": "table",
+  "chair": "sofa", 
+  "samples": 1
 }

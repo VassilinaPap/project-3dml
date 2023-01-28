@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 import sys
 sys.path.append('../models')
@@ -54,7 +55,7 @@ def fun_confusion_matrix(predictions, targets):
 
     plt.title('Confusion Matrix', fontsize=20)
 
-    plt.savefig('ConMatlossmb1.png')
+    plt.savefig('ConMatlosssb0.2.png')
     plt.show()
 
 def ioU(predictions_rec, voxel):
@@ -85,6 +86,7 @@ def test(model, test_dataloader, device, config):
     best_batch_iou = -np.inf
     best_batch_iou_id = 0
     best_batch_iou_data = None
+    best_batch_iou_data_true = None
     best_batch_iou_labels = None
     predictions_list= None
     target_list= None
@@ -118,8 +120,11 @@ def test(model, test_dataloader, device, config):
                 if(iou > best_batch_iou):
                     best_batch_iou = iou
                     best_batch_iou_data = predictions_rec.cpu().numpy()
+                    best_batch_iou_data_true = batch_test['voxel'].cpu().numpy()
                     best_batch_iou_labels = target
                     best_target_shape = target.shape[0]
+
+
 
         total += predicted_labels.shape[0]
         correct += (predicted_labels == target).sum().item()
@@ -153,7 +158,17 @@ def test(model, test_dataloader, device, config):
         #print(config["batch_size"])
         for i in range(best_target_shape):
             class_tmp = ShapeNetDataset.index_to_class(best_batch_iou_labels[i].item())
-            save_voxel_grid(config["recon_folder"] + "/" + str(class_tmp)  + ".ply", best_batch_iou_data[i, :, :, :])
+            #print(best_batch_iou_data[i, :, :, :].shape)
+            path_name = config["recon_folder"] + "/" + str(class_tmp)  + ".ply"
+            path_name_true = config["recon_folder"] + "/" + str(class_tmp)+ "_true" + ".ply"
+            z = 1
+            while os.path.exists(path_name):
+                path_name = config["recon_folder"] + "/" + str(class_tmp) + str(z)  + ".ply"
+                path_name_true = config["recon_folder"] + "/" + str(class_tmp)+ "_true" + str(z)  + ".ply"
+                z +=1
+
+            save_voxel_grid(path_name, best_batch_iou_data[i, :, :, :])
+            save_voxel_grid(path_name_true, best_batch_iou_data_true[i, :, :, :])
 
 # plot the images in the batch, along with predicted and true labels
 def plot_classes_preds(images, predicted_labels, predictions, labels, classes, plot_images_num):
@@ -218,16 +233,16 @@ if __name__ == "__main__":
     np.random.seed(15)
 
     config = {
-        'experiment_name': 'mvcnn_mbexp1_test',
+        'experiment_name': 'mvcnn_sbexp20.2_test',
         'device': 'cuda:0',
         'batch_size': 64,
-        'resume_ckpt': '../training/saved_models/mvcnn_mbexp1/model_best_loss.ckpt',
-        'num_views': 1,
-        'cl_weight': 0.5,
+        'resume_ckpt': '../training/saved_models/mvcnn_sbexp2_0.2/model_best_loss.ckpt',
+        'num_views': 3,
+        'cl_weight': 0.2,
         'plot_images_num': 1,
-        'recon_folder': "./reconmbexp1/reconlossmb1",
+        'recon_folder': "./reconsbexp2_0.2/reconloss",
         'flag_rec':True,
-        'flag_multibranch':True
+        'flag_multibranch':False
     }
 
     Path(config["recon_folder"]).mkdir(exist_ok=True, parents=True)
